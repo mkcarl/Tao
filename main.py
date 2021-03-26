@@ -9,6 +9,7 @@ client = commands.Bot(command_prefix="--", help_command=PrettyHelp(no_category="
 @client.command(help="Yeets the bot out of existance.")
 async def yeet(ctx):
     await client.logout()
+    print(f"Bot have been yeeted out of existance by {ctx.author.name}")
 
 @client.listen("on_ready")
 async def ready():

@@ -1,13 +1,22 @@
 import aiohttp
+import re
+
 
 class Information:
     def __init__(self):
         pass
 
-    async def extract_news(self):
+    @staticmethod
+    def _cleanHTML(rawhtml):
+        cleanr = re.compile('<.*?>')
+        cleantext = re.sub(cleanr, '', rawhtml)
+        return cleantext
+
+    @classmethod
+    async def extract_news(cls):
         all_news = []
-        news_data = await self._asyncGET("https://api.apiit.edu.my/apspace/student")
-        media_data = await self._asyncGET("https://api.apiit.edu.my/apspace/media")
+        news_data = await cls._asyncGET("https://api.apiit.edu.my/apspace/student")
+        media_data = await cls._asyncGET("https://api.apiit.edu.my/apspace/media")
 
         for news in news_data:
             news_media_id = news["featured_media"]
@@ -22,12 +31,16 @@ class Information:
                 "id" : news["id"],
                 "link" : news["link"],
                 "title" : news["title"]["rendered"],
-                "description" : news["content"]["rendered"],
+                "description" : cls._cleanHTML(news["content"]["rendered"]),
                 "media_link" : news_media
             }
+            all_news.append(news_entry)
+        return all_news
 
-    async def extract_tt(self, intake_code):
-        tt_all = await self._asyncGET("https://s3-ap-southeast-1.amazonaws.com/open-ws/weektimetable")
+
+    @classmethod
+    async def extract_tt(cls, intake_code):
+        tt_all = await cls._asyncGET("https://s3-ap-southeast-1.amazonaws.com/open-ws/weektimetable")
         tt_intake = []
         for class_ in tt_all:
             if class_["INTAKE"] == intake_code:
