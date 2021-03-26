@@ -26,11 +26,3 @@ class Google_Image_Search:
             async with session.get(url) as r:
                 assert r.status == 200
                 return await r.json()
-
-# if __name__ == "__main__":
-#     gis = Google_Image_Search("AIzaSyAqfjAm3HxypuIQ8MLZD7NYQfcDBZfGNFg", "b0f9b48ac3612bdd8")
-#     async def main():
-#         results = await gis.search("laptop")
-#         for result in results:
-#             print(result["link"])
-#     asyncio.run(main())

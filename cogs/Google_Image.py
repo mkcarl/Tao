@@ -16,7 +16,16 @@ class Google_Image(commands.Cog):
     @gsearch.command(help="Initialises the search engine")
     async def init(self, ctx, api_key, search_engine_id):
         self.gis = google_image_search.Google_Image_Search(api_key, search_engine_id)
-        await ctx.send("Initialisation done.")
+        try:
+            await self.gis.search("test")
+            await ctx.send("Initialisation done.")
+        except AssertionError:
+            await ctx.send("Test connection have failed. Please check whether the API key and Search Engine ID is correct.")
+
+    @init.error
+    async def init_err(self, ctx, err):
+        if isinstance(err, commands.MissingRequiredArgument):
+            await ctx.send("There is a missing argument. Please check the command again or use `--help gsearch init`")
 
     @gsearch.command(help="Sends the image link of the specified keywords. \n\t <number> : how many images to send (1-10) \n\t [keywords...] : search keywords")
     async def img(self, ctx, number, *keywords):
@@ -39,9 +48,13 @@ class Google_Image(commands.Cog):
                     await ctx.send(embed=picEmbed)
             else:
                 await ctx.send("Search engine have not been initialised. Please do the `--help gsearch init` for more information.")
-        except AssertionError:
+        except (AssertionError, ValueError):
             await ctx.send("Invalid parameters. Please use `--help gsearch img` for more information.")
 
+    @img.error
+    async def img_err(self, ctx, err):
+        if isinstance(err, commands.MissingRequiredArgument):
+            await ctx.send("There is a missing argument. Please check the command again or use `--help gsearch img`")
 
 def setup(client):
     client.add_cog(Google_Image(client))
