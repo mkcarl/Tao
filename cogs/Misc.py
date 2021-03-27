@@ -9,8 +9,9 @@ class Misc(commands.Cog):
         self.client = client
 
     @commands.command(help="React the words to the specific message. reactionTxt can only be non-recurring words. eg: quick")
-    async def react(self, ctx, msgID, reactionTxt):
-        formattedTxt = reactionTxt.lower().strip().replace(" ", '')
+    async def react(self, ctx, msgID, *reactionTxt):
+        await ctx.message.delete()
+        formattedTxt = ''.join(reactionTxt).lower().strip().replace(" ", '')
         viableReaction = (True if len(Counter(formattedTxt))==len(formattedTxt) else False) \
                and \
                not bool(re.compile(r'[^a-z0-9]').search(formattedTxt)) ## check if all char occurs once AND contain only alphanumeric
@@ -59,14 +60,17 @@ class Misc(commands.Cog):
                 for c in formattedTxt:
                     await targetMsg.add_reaction(emojiDict[c])
             else:
-                msg = await ctx.send(f"Invalid `reactionTxt`.")
-
+                msg = await ctx.send(f"Invalid `reactionTxt`.{ctx.author.mention}")
+                await msg.delete(delay=3)
         except discord.errors.NotFound:
-            await ctx.send(f"Message id: {msgID} not found.")
+            msg = await ctx.send(f"Message id: {msgID} not found.{ctx.author.mention}")
+            await msg.delete(delay=3)
         except discord.errors.Forbidden:
-            await ctx.send(f"I do not have the permission to do so!")
+            msg = await ctx.send(f"I do not have the permission to do so!{ctx.author.mention}")
+            await msg.delete(delay=3)
         except discord.errors.HTTPException:
-            await ctx.send(f"Operation failed.")
+            msg = await ctx.send(f"Operation failed.{ctx.author.mention}")
+            await msg.delete(delay=3)
 
 
 
