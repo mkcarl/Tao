@@ -1,11 +1,14 @@
 import discord
-from discord.ext import  commands
-from TaoFunc import APU
+from discord.ext import commands, tasks
+from TaoFunc import APU, checks
+from datetime import datetime
 
 
 class APU_info(commands.Cog):
     def __init__(self, client):
         self.client = client
+        self.newsUpdate.start()
+
 
     @commands.group(help="APU related commands.")
     async def apu(self, ctx):
@@ -34,6 +37,53 @@ class APU_info(commands.Cog):
                     news_embed.set_image(url=news_["media_link"])
                     news_embed.set_footer(text=news_["id"])
                     await ctx.send(embed=news_embed)
+
+    @apu.command(help="Set the current channel as a specific channel that receives automatic updates.")
+    async def set(self, ctx, chType):
+        """
+        :param chType: str
+            eg. "news", "timetable"
+
+        A channel is said to be a news channel if the channel contains an embed, where the footer is "News"
+        The news channel will receive updates for APU news at a set interval.
+        """
+        if chType.lower() == "news":
+            embed = discord.Embed(
+                title="APU News Channel",
+                description="This channel will be used as a news channel that receives automatic updates for events happening in APU. Delete this message/embed if you change your mind."
+            )
+            embed.set_footer(text="News")
+            await ctx.send(embed=embed)
+
+        else:
+            ctx.send(f"{chType} is not a valid channel type.{ctx.author.mention}")
+
+        await ctx.message.delete(delay=5)
+
+    @apu.command()
+    @commands.check(checks.is_bot_owner())
+    async def stop(self, ctx):
+        print("loop stopped")
+        self.newsUpdate.stop()
+
+    @tasks.loop(hours=6)
+    async def newsUpdate(self):
+        for guild in self.client.guilds:
+            for text_channel in guild.text_channels:
+                async for msg in text_channel.history(limit=1000):
+                    if len(msg.embeds) == 0:
+                        continue
+                    else:
+                        for e in msg.embeds:
+                            if e.footer.text != "News":
+                                continue
+                            else:
+                                cmd = self.client.get_command("apu news")
+                                ctx = await self.client.get_context(msg)
+                                ctx.command = cmd
+                                await ctx.invoke(cmd)
+                                print(f"Updated news in {ctx.channel.name} at {datetime.now().strftime('%c')}")
+                                break
 
 def setup(client):
     client.add_cog(APU_info(client))
