@@ -17,6 +17,30 @@ class Information:
         all_news = []
         news_data = await cls._asyncGET("https://api.apiit.edu.my/apspace/student")
         media_data = await cls._asyncGET("https://api.apiit.edu.my/apspace/media")
+        slideshow_data = await cls._asyncGET("https://api.apiit.edu.my/apspace/student/slideshow")
+
+        for slideshow in slideshow_data:
+            slideshow_media_id = slideshow["featured_media"]
+
+            for media in media_data:
+                if media["id"] != slideshow_media_id:
+                    continue
+                slideshow_media = media["guid"]["rendered"]
+                break
+
+            try:
+                link = slideshow["post-meta-fields"]["slideshow_url"][0]
+            except KeyError:
+                link = slideshow["link"]
+
+            slideshow_entry = {
+                "id": slideshow["id"],
+                "link": link,
+                "title": slideshow["title"]["rendered"],
+                "description": cls._cleanHTML(slideshow["content"]["rendered"]),
+                "media_link": slideshow_media
+            }
+            all_news.append(slideshow_entry)
 
         for news in news_data:
             news_media_id = news["featured_media"]
@@ -28,11 +52,11 @@ class Information:
                 break
 
             news_entry = {
-                "id" : news["id"],
-                "link" : news["link"],
-                "title" : news["title"]["rendered"],
-                "description" : cls._cleanHTML(news["content"]["rendered"]),
-                "media_link" : news_media
+                "id": news["id"],
+                "link": news["link"],
+                "title": news["title"]["rendered"],
+                "description": cls._cleanHTML(news["content"]["rendered"]),
+                "media_link": news_media
             }
             all_news.append(news_entry)
         return all_news
