@@ -34,6 +34,7 @@ class APU_info(commands.Cog):
                         description=news_["description"][:2047] if len(news_["description"])>2048 else news_["description"],
                         url=news_["link"]
                     )
+                    news_embed.set_author(name="APSpace News feed")
                     news_embed.set_image(url=news_["media_link"])
                     news_embed.set_footer(text=news_["id"])
                     await ctx.send(embed=news_embed)
@@ -60,11 +61,17 @@ class APU_info(commands.Cog):
 
         await ctx.message.delete(delay=5)
 
-    @apu.command()
+    @apu.command(help="Start the automatic new updater")
     @commands.check(checks.is_bot_owner())
     async def stop(self, ctx):
-        print("loop stopped")
-        self.newsUpdate.stop()
+        self.newsUpdate.cancel()
+        print(f"News update have been stopped by {ctx.author.name} at {datetime.now()}")
+
+    @apu.command(help="Stop the automatic new updater")
+    @commands.check(checks.is_bot_owner())
+    async def start(self, ctx):
+        self.newsUpdate.start()
+        print(f"News update have been started by {ctx.author.name} at {datetime.now()}")
 
     @tasks.loop(hours=6)
     async def newsUpdate(self):
@@ -85,5 +92,8 @@ class APU_info(commands.Cog):
                                 print(f"Updated news in {ctx.channel.name} at {datetime.now().strftime('%c')}")
                                 break
 
-def setup(client):
+  def setup(client):
     client.add_cog(APU_info(client))
+
+## TODO:
+## Add ping message if there is unhandled exception.
