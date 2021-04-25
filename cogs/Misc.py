@@ -17,7 +17,7 @@ import concurrent.futures
 
 
 class Misc(commands.Cog):
-    def __init__(self, client):
+    def __init__(self, client:discord.Client):
         self.client = client
         self.cartoonify_param_converter = da.ArgumentConverter(
             line=da.OptionalArgument(
@@ -116,6 +116,7 @@ class Misc(commands.Cog):
 
     @commands.command(help="Cartoonify an image.")
     async def cartoon(self, ctx, *, param: params.cartoonify = params.cartoonify.defaults()):
+        await self.client.change_presence(activity=discord.CustomActivity(name="Calculating shits"))
         now = datetime.now().strftime('%y%m%d%H%M%S%f')
         async with ctx.typing():
             await asyncio.sleep(1)
@@ -157,15 +158,15 @@ class Misc(commands.Cog):
                 os.mkdir("./.cartoonOutput")
             output_filename = f"./.cartoonOutput/Output_{now}.png"
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(Cartoonify.wrapper, input_filename,
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(None, Cartoonify.wrapper, input_filename,
                                          param["line"],
                                          param["blur"],
                                          param["k"],
                                          param["d"],
                                          param["sigma"])
-                output = future.result()
-                Cartoonify.save_img(output, output_filename)
+            await loop.run_in_executor(None, Cartoonify.save_img, results, output_filename)
+
 
         await ctx.reply(file=discord.File(output_filename))
 
