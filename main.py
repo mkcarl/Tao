@@ -8,7 +8,7 @@ client = commands.Bot(command_prefix="--", help_command=PrettyHelp(no_category="
 
 @client.command(help="Yeets the bot out of existance.")
 async def yeet(ctx):
-    await client.logout()
+    await client.close()
     print(f"Bot have been yeeted out of existance by {ctx.author.name}")
 
 @client.listen("on_ready")
@@ -47,6 +47,17 @@ async def unload(ctx, *extensions):
             await ctx.send(f"One or more extension mentioned is not available. Please check the spelling.")
     else:
         await ctx.send("Please specify which extension to load with the command `--ext load <extension>`")
+
+@ext.command(help="Reloads the extension.")
+async def reload(ctx, extension):
+    client.unload_extension(f"cogs.{extension}")
+    client.load_extension(f"cogs.{extension}")
+    await ctx.send(f"Reloaded {extension}.")
+
+@reload.error
+async def reload_err(ctx, err):
+    await ctx.send("Error!")
+    print(err)
 
 @ext.command(help="Shows a list of all the available extensions.")
 async def list(ctx):
