@@ -1,19 +1,17 @@
-import discord
-import numpy as np
-from discord.ext import commands
-from collections import Counter
-import re
-import aiohttp
-import aiofiles
-from skimage import io
 import asyncio
-from TaoFunc.cartoonify import Cartoonify
-import concurrent.futures
-import discord_argparse as da
-from TaoFunc import params
-from datetime import datetime
 import os
-import concurrent.futures
+import re
+from collections import Counter
+from datetime import datetime
+
+import aiofiles
+import aiohttp
+import discord
+import discord_argparse as da
+from discord.ext import commands
+
+from TaoFunc import params
+from TaoFunc.cartoonify import Cartoonify
 
 
 class Misc(commands.Cog):
@@ -116,7 +114,8 @@ class Misc(commands.Cog):
 
     @commands.command(help="Cartoonify an image.")
     async def cartoon(self, ctx, *, param: params.cartoonify = params.cartoonify.defaults()):
-        await self.client.change_presence(activity=discord.CustomActivity(name="Calculating shits"))
+        await self.client.change_presence(
+            activity=discord.Activity(name=f"calculations by {ctx.author.name}", type=discord.ActivityType.playing))
         now = datetime.now().strftime('%y%m%d%H%M%S%f')
         async with ctx.typing():
             await asyncio.sleep(1)
@@ -167,6 +166,7 @@ class Misc(commands.Cog):
                                          param["sigma"])
             await loop.run_in_executor(None, Cartoonify.save_img, results, output_filename)
 
+        await self.client.change_presence(activity=None)
 
         await ctx.reply(file=discord.File(output_filename))
 

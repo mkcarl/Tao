@@ -2,7 +2,7 @@ import os
 import discord
 from discord.ext import commands
 import datetime
-from pretty_help import PrettyHelp, Navigation
+from pretty_help import PrettyHelp
 
 client = commands.Bot(command_prefix="--", help_command=PrettyHelp(no_category="Base commands", sort_command=True, color=discord.Color.orange()))
 

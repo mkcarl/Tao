@@ -6,3 +6,6 @@ beautifulsoup4~=4.9.3
 opencv-python~=4.5.1.48
 numpy~=1.20.2
 scikit-image~=0.18.1
+aiofiles~=0.6.0
+discord-argparse
+discord-pretty-help

@@ -91,9 +91,12 @@ class APU_info(commands.Cog):
                                 await ctx.invoke(cmd)
                                 print(f"Updated news in {ctx.channel.name} at {datetime.now().strftime('%c')}")
                                 break
+    @newsUpdate.error
+    async def newsUpdate_err(self, ctx, err):
+        owner = self.client.fetch_user(self.client.owner_id)
+        owner.send("Some error in automatic update. Please check the instance for more details.")
+        print(err)
 
-  def setup(client):
+def setup(client):
     client.add_cog(APU_info(client))
 
-## TODO:
-## Add ping message if there is unhandled exception.
