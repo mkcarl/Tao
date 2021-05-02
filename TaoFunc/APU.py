@@ -71,6 +71,18 @@ class Information:
                 tt_intake.append(class_)
         return tt_intake
 
+    @classmethod
+    async def extract_holiday(cls):
+        holiday_all = await cls._asyncGET("https://api.apiit.edu.my/transix/holidays")
+        student_holiday = []
+        for holiday in holiday_all["holidays"]:
+            if holiday["holiday_people_affected"] is None:
+                continue
+            elif "student" in holiday["holiday_people_affected"]:
+                student_holiday.append(holiday)
+            else:
+                continue
+        return student_holiday
 
 
     @staticmethod
