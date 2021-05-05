@@ -41,36 +41,66 @@ class APU_info(commands.Cog):
                     news_embed.set_footer(text=news_["id"])
                     await ctx.send(embed=news_embed)
 
-    @apu.command(help="Set the current channel as a specific channel that receives automatic updates.")
-    async def set(self, ctx, chType):
+    @apu.group(help="Set the current channel as a specific channel that receives automatic updates.")
+    async def setch(self, ctx):
         """
-        :param chType: str
+        :param ctx: str
             eg. "news", "timetable"
 
         A channel is said to be a news channel if the channel contains an embed, where the footer is "News"
         The news channel will receive updates for APU news at a set interval.
         """
-        if chType.lower() == "news":
+        if ctx.invoked_subcommand is None or ctx.command_failed:
+            await ctx.send("Invalid `--apu` command.")
+
+    @setch.command(help="Set the current channel to a news channel")
+    async def news(self, ctx):
+        embed = discord.Embed(
+            title="APU News Channel",
+            description="This channel will be used as a news channel that receives automatic updates for events "
+                        "happening in APU. Delete this message/embed if you change your mind."
+        )
+        embed.set_footer(text="News")
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+
+    @setch.command(help="Set the current channel to a holiday update channel")
+    async def holidays(self, ctx):
+        embed = discord.Embed(
+            title="APU Holidays Channel",
+            description="This channel will be used as a reminder for upcoming holidays for APU."
+                        " Reminder will be sent 7 days in advance."
+                        " Delete this message/embed if you change your mind."
+        )
+        embed.set_footer(text="Holidays")
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+
+    @setch.group(help="Set the current channel to an exam update channel.")
+    async def exams(self, ctx: commands.Context):
+        is_exam = False
+        async for msg in ctx.channel.history(limit=1000):
+            if len(msg.embeds) == 0:
+                continue
+            else:
+                for e in msg.embeds:
+                    if e.footer.text != "Exams":
+                        is_exam = False
+                        continue
+                    else:
+                        is_exam = True
+                        break
+
+        if not is_exam:
             embed = discord.Embed(
-                title="APU News Channel",
-                description="This channel will be used as a news channel that receives automatic updates for events "
-                            "happening in APU. Delete this message/embed if you change your mind."
+                title="APU Exam Channel",
+                description="This channel will be used as an update for exam timetables for the specified intakes."
             )
-            embed.set_footer(text="News")
-            await ctx.send(embed=embed)
-        elif chType.lower() == "holidays":
-            embed = discord.Embed(
-                title="APU Holidays Channel",
-                description="This channel will be used as a reminder for upcoming holidays for APU."
-                            " Reminder will be sent 7 days in advance."
-                            " Delete this message/embed if you change your mind."
-            )
-            embed.set_footer(text="Holidays")
+            embed.set_footer(text="Exams")
             await ctx.send(embed=embed)
         else:
-            ctx.send(f"`{chType}` is not a valid channel type.{ctx.author.mention}")
-
-        await ctx.message.delete(delay=5)
+            await ctx.send(f"{ctx.author.mention}, this channel is already initiated as an exam channel.", delete_after=5)
+        await ctx.message.delete()
 
     @apu.command(help="Start the automatic new updater")
     @commands.check(checks.is_bot_owner())
@@ -172,8 +202,122 @@ class APU_info(commands.Cog):
             if datetime.now().hour == 0:
                 break
             else:
-                print("minute is still not 3")
                 await asyncio.sleep(1)
+
+    @apu.group()
+    async def exam(self, ctx: commands.Context):
+        async with ctx.typing():
+            if ctx.invoked_subcommand is None:
+                for ch in await self._list_channel("Exams"):
+                    intakes = []
+                    async for msg in ch.history(limit=1000):
+                        if len(msg.embeds) != 0:
+                            for e in msg.embeds:
+                                if e.title == "Intake initiated":
+                                    intakes.append(e.footer.text)
+
+                    for intake in intakes:
+                        tt = await APU.Information.extract_exam(intake)
+                        embed = discord.Embed(
+                            title=f"{intake}",
+                            description=f"The following is the exam timetable for intake {intake}. "
+                                        f"This message will be updated every day. "
+                        )
+
+                        for exam in tt:
+                            if exam == {}:
+                                embed.add_field(name="Exam timetable for this intake is unavailable.")
+                                continue
+
+                            start_date, start_time = exam['since'].split("T")
+                            end_date, end_time = exam['until'].split("T")
+                            start_time = dt.datetime.strptime(start_time.replace(":", ''), "%H%M%S%z")
+                            end_time = dt.datetime.strptime(end_time.replace(":", ''), "%H%M%S%z")
+                            embed.add_field(
+                                name=f"{exam['subjectDescription']} ({exam['module']})",
+                                value=f"**Date** : {dt.datetime.strptime(start_date, '%Y-%m-%d').strftime('%d %B %Y')} \n"
+                                      f"**Time** : {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')} \n"
+                                      f"**Duration** : {(end_time - start_time).seconds/60/60} hour(s) \n"
+                                      f"**Venue** : {exam['venue']} \n"
+                                      f"**Assessment Type** : {exam['assessmentType']} \n"
+                                      f"**Appraisal Due** :  \n"
+                                      f"**Docket Due** :  \n"
+                                      f"================\n"
+                                      f"**Results date** : "
+                                      f"{dt.datetime.strptime(exam['resultDate'], '%Y-%m-%d').strftime('%d %B %Y')}\n"
+                                      f"================",
+                                inline=False
+                            )
+
+                        intake_present = None
+                        async for msg in ch.history(limit=100):
+                            if len(msg.embeds) != 0:
+                                for e in msg.embeds:
+                                    if e.title == intake:
+                                        intake_present = msg
+
+                        if intake_present is None:
+                            await ch.send(embed=embed)
+                        else:
+                            await intake_present.edit(embed=embed)
+
+
+    @exam.command(help="Initiate intake to update.")
+    async def set(self, ctx: discord.ext.commands.Context, intake: str):
+        await ctx.message.delete()
+        is_exam = False
+        async for msg in ctx.channel.history(limit=1000):
+            if len(msg.embeds) == 0:
+                continue
+            else:
+                for e in msg.embeds:
+                    if e.footer.text != "Exams":
+                        is_exam = False
+                        continue
+                    else:
+                        is_exam = True
+                        break
+
+                if is_exam:
+                    break
+
+        if is_exam:
+            intake_embed = discord.Embed(
+                title="Intake initiated",
+                description=f"Intake **{intake.upper()}** has been initiated. Updates on exam timetable of this intake "
+                            f"will be updated here."
+            )
+            intake_embed.set_footer(text=intake.upper())
+            await ctx.send(embed=intake_embed)
+
+        else:
+            await ctx.send("This channel is not set to an exam channel yet. Please do so using the "
+                           "command `--apu setch exams`")
+
+    async def _is_channel(self, text_channel: discord.TextChannel, ch_type: str) -> bool:
+        is_correct = False
+        async for msg in text_channel.history(limit=1000):
+            if len(msg.embeds) == 0:
+                continue
+            else:
+                for e in msg.embeds:
+                    if e.footer.text == ch_type:
+                        is_correct = True
+                    else:
+                        continue
+                if is_correct:
+                    break
+        return is_correct
+
+    async def _list_channel(self, ch_type: str) -> list:
+        channels = []
+        for guild in self.client.guilds:
+            for text_channel in guild.text_channels:
+                if await self._is_channel(text_channel, ch_type):
+                    channels.append(text_channel)
+                    continue
+        return channels
+
 
 def setup(client):
     client.add_cog(APU_info(client))

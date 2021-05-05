@@ -84,6 +84,11 @@ class Information:
                 continue
         return student_holiday
 
+    @classmethod
+    async def extract_exam(cls, intake: str):
+        exam_all = await cls._asyncGET(f"https://api.apiit.edu.my/examination/{intake.upper()}")
+        return exam_all
+
 
     @staticmethod
     async def _asyncGET(URL):
