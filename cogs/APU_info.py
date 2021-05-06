@@ -206,38 +206,38 @@ class APU_info(commands.Cog):
 
     @apu.group()
     async def exam(self, ctx: commands.Context):
-        async with ctx.typing():
-            if ctx.invoked_subcommand is None:
-                for ch in await self._list_channel("Exams"):
-                    intakes = []
-                    async for msg in ch.history(limit=1000):
-                        if len(msg.embeds) != 0:
-                            for e in msg.embeds:
-                                if e.title == "Intake initiated":
-                                    intakes.append(e.footer.text)
+        if ctx.invoked_subcommand is None:
+            for ch in await self._list_channel("Exams"):
+                intakes = []
+                async for msg in ch.history(limit=1000):
+                    if len(msg.embeds) != 0:
+                        for e in msg.embeds:
+                            if e.title == "Intake initiated":
+                                intakes.append(e.footer.text)
 
-                    for intake in intakes:
-                        tt = await APU.Information.extract_exam(intake)
-                        embed = discord.Embed(
-                            title=f"{intake}",
-                            description=f"The following is the exam timetable for intake {intake}. "
-                                        f"This message will be updated every day. "
-                        )
-
+                for intake in intakes:
+                    tt = await APU.Information.extract_exam(intake)
+                    embed = discord.Embed(
+                        title=f"{intake}",
+                        description=f"The following is the exam timetable for intake {intake}. "
+                                    f"This message will be updated every day. "
+                    )
+                    if not tt:
+                        embed.add_field(name="Exam timetable for this intake is unavailable.", value="")
+                    else:
                         for exam in tt:
-                            if exam == {}:
-                                embed.add_field(name="Exam timetable for this intake is unavailable.")
-                                continue
-
                             start_date, start_time = exam['since'].split("T")
                             end_date, end_time = exam['until'].split("T")
+                            start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+                            end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
+                            days_left = (dt.datetime.today() - start_date).days if dt.datetime.today() > start_date else 0
                             start_time = dt.datetime.strptime(start_time.replace(":", ''), "%H%M%S%z")
                             end_time = dt.datetime.strptime(end_time.replace(":", ''), "%H%M%S%z")
                             embed.add_field(
                                 name=f"{exam['subjectDescription']} ({exam['module']})",
-                                value=f"**Date** : {dt.datetime.strptime(start_date, '%Y-%m-%d').strftime('%d %B %Y')} \n"
+                                value=f"**Date** : {start_date.strftime('%d %B %Y')} ({days_left} days left)\n"
                                       f"**Time** : {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')} \n"
-                                      f"**Duration** : {(end_time - start_time).seconds/60/60} hour(s) \n"
+                                      f"**Duration** : {(end_time - start_time).seconds//3600}:{str(((end_time - start_time).seconds//60)%60).zfill(2)} hour(s) \n"
                                       f"**Venue** : {exam['venue']} \n"
                                       f"**Assessment Type** : {exam['assessmentType']} \n"
                                       f"**Appraisal Due** :  \n"
@@ -249,18 +249,41 @@ class APU_info(commands.Cog):
                                 inline=False
                             )
 
-                        intake_present = None
-                        async for msg in ch.history(limit=100):
-                            if len(msg.embeds) != 0:
-                                for e in msg.embeds:
-                                    if e.title == intake:
-                                        intake_present = msg
+                    intake_present = None
+                    async for msg in ch.history(limit=100):
+                        if len(msg.embeds) != 0:
+                            for e in msg.embeds:
+                                if e.title == intake:
+                                    intake_present = msg
 
-                        if intake_present is None:
-                            await ch.send(embed=embed)
-                        else:
-                            await intake_present.edit(embed=embed)
+                    if intake_present is None:
+                        await ch.send(embed=embed)
+                    else:
+                        await intake_present.edit(embed=embed)
 
+    @tasks.loop(minutes=1)
+    async def examUpdate(self):
+        pass
+        # ch_context = []
+        # for ch in await self._list_channel("Exams"):
+        #     async for msg in ch.history(limit=1000):
+        #         if len(msg.embeds) != 0:
+        #             for e in msg.embeds:
+        #                 if e.footer.text == "Exams":
+        #                     ch_context.append(await self.client.get_context(msg))
+        #
+        # for ctx in ch_context:
+        #     cmd = self.client.get_command("apu exam")
+        #     await ctx.invoke(cmd)
+        # print(f"updated?")
+
+    @exam.command()
+    async def startloop(self, ctx: commands.Context):
+        self.examUpdate.start()
+
+    @exam.command()
+    async def stoploop(self, ctx: commands.Context):
+        self.examUpdate.cancel()
 
     @exam.command(help="Initiate intake to update.")
     async def set(self, ctx: discord.ext.commands.Context, intake: str):
@@ -317,6 +340,7 @@ class APU_info(commands.Cog):
                     channels.append(text_channel)
                     continue
         return channels
+
 
 
 def setup(client):
