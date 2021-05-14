@@ -165,8 +165,9 @@ class APU_info(commands.Cog):
         holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
         await ctx.send(embed=holEmbed)
 
-    @tasks.loop(hours=24)
+    @tasks.loop(seconds=30)
     async def holUpdate(self):
+        print("started")
         next_hol = await self.next_holiday()
         for hol_ch in await self._list_channel("Holidays"):
             last_msg: discord.Message = None
@@ -193,10 +194,78 @@ class APU_info(commands.Cog):
                 # current holiday is different from upcoming holiday
                 await hol_ch.send(embed=holEmbed)
 
-            await hol_ch.edit(
-                name=f"{next_hol['holiday_description']} {str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}")
+            math_letters = {
+                'a': '𝚊',
+                'b': '𝚋',
+                'c': '𝚌',
+                'd': '𝚍',
+                'e': '𝚎',
+                'f': '𝚏',
+                'g': '𝚐',
+                'h': '𝚑',
+                'i': '𝚒',
+                'j': '𝚓',
+                'k': '𝚔',
+                'l': '𝚕',
+                'm': '𝚖',
+                'n': '𝚗',
+                'o': '𝚘',
+                'p': '𝚙',
+                'q': '𝚚',
+                'r': '𝚛',
+                's': '𝚜',
+                't': '𝚝',
+                'u': '𝚞',
+                'v': '𝚟',
+                'w': '𝚠',
+                'x': '𝚡',
+                'y': '𝚢',
+                'z': '𝚣',
+                'A': '𝖠',
+                'B': '𝖡',
+                'C': '𝖢',
+                'D': '𝖣',
+                'E': '𝖤',
+                'F': '𝖥',
+                'G': '𝖦',
+                'H': '𝖧',
+                'I': '𝖨',
+                'J': '𝖩',
+                'K': '𝖪',
+                'L': '𝖫',
+                'M': '𝖬',
+                'N': '𝖭',
+                'O': '𝖮',
+                'P': '𝖯',
+                'Q': '𝖰',
+                'R': '𝖱',
+                'S': '𝖲',
+                'T': '𝖳',
+                'U': '𝖴',
+                'V': '𝖵',
+                'W': '𝖶',
+                'X': '𝖷',
+                'Y': '𝖸',
+                'Z': '𝖹',
+                ' ': '‎',
+                '(': '❨',
+                ')': '❩',
+                '[': '［',
+                ']': '］'
+            }
 
-            print(f"Updated holiday at channel : {hol_ch.name}")
+            new_ch_name = f"{next_hol['holiday_description']} [{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}]"
+            transformed_name = ""
+            for c in new_ch_name:
+                if c in math_letters:
+                    transformed_name += math_letters[c]
+                else:
+                    transformed_name += c
+            await hol_ch.edit(
+                name=transformed_name)
+            print(new_ch_name)
+
+        print(f"Updated holidays at {datetime.now().strftime('%c')}")
 
     @holUpdate.error
     async def holUpdate_err(self, ctx, err):
@@ -204,13 +273,13 @@ class APU_info(commands.Cog):
         owner.send("Some error in automatic holiday update. Please check the instance for more details.")
         print(err)
 
-    @holUpdate.before_loop
-    async def before_holUpdate(self):
-        for _ in range(60*60*24):
-            if datetime.now().hour == 0:
-                break
-            else:
-                await asyncio.sleep(1)
+    # @holUpdate.before_loop
+    # async def before_holUpdate(self):
+    #     for _ in range(60*60*24):
+    #         if datetime.now().hour == 0:
+    #             break
+    #         else:
+    #             await asyncio.sleep(1)
 
     @apu.group()
     async def exam(self, ctx: commands.Context):
