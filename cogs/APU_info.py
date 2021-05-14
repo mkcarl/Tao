@@ -151,7 +151,27 @@ class APU_info(commands.Cog):
     @apu.group(help="Displays the closest or ongoing holiday.")
     async def holiday(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
-            next_hol = await self.next_holiday(0)
+            async with ctx.typing():
+                next_hol = await self.next_holiday(0)
+                holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
+                                                        description=f"{next_hol['holiday_description']}",
+                                                        colour=discord.Colour.from_rgb(38, 166, 154))
+                holEmbed.set_author(name="APU holidays")
+                holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
+                                   inline=True)
+                holEmbed.add_field(name="Duration",
+                                   value=f"{(next_hol['holiday_end_date'] - next_hol['holiday_start_date']).days + 1} day(s)",
+                                   inline=True)
+                countdown = (next_hol['holiday_start_date'] - dt.datetime.today()).days + 1
+                holEmbed.add_field(name="Countdown", value=f"{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}",
+                                   inline=False)
+                holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
+                await ctx.send(embed=holEmbed)
+
+    @holiday.command(help="Displays the next <index>th holiday. eg: '--apu holiday next 1' will show the next next holiday. ")
+    async def next(self, ctx, index):
+        async with ctx.typing():
+            next_hol = await self.next_holiday(int(index))
             holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
                                                     description=f"{next_hol['holiday_description']}",
                                                     colour=discord.Colour.from_rgb(38, 166, 154))
@@ -166,24 +186,6 @@ class APU_info(commands.Cog):
                                inline=False)
             holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
             await ctx.send(embed=holEmbed)
-
-    @holiday.command(help="Displays the next <index>th holiday. eg: '--apu holiday next 1' will show the next next holiday. ")
-    async def next(self, ctx, index):
-        next_hol = await self.next_holiday(int(index))
-        holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
-                                                description=f"{next_hol['holiday_description']}",
-                                                colour=discord.Colour.from_rgb(38, 166, 154))
-        holEmbed.set_author(name="APU holidays")
-        holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
-                           inline=True)
-        holEmbed.add_field(name="Duration",
-                           value=f"{(next_hol['holiday_end_date'] - next_hol['holiday_start_date']).days + 1} day(s)",
-                           inline=True)
-        countdown = (next_hol['holiday_start_date'] - dt.datetime.today()).days + 1
-        holEmbed.add_field(name="Countdown", value=f"{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}",
-                           inline=False)
-        holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
-        await ctx.send(embed=holEmbed)
 
     @holiday.error
     async def hol_err(self, ctx: commands.Context, err):
@@ -323,10 +325,11 @@ class APU_info(commands.Cog):
                     embed = discord.Embed(
                         title=f"{intake}",
                         description=f"The following is the exam timetable for intake {intake}. "
-                                    f"This message will be updated every day. "
+                                    f"This message will be updated every day. ",
+                        colour=discord.Colour.from_rgb(52, 235, 52)
                     )
                     if not tt:
-                        embed.add_field(name="Exam timetable for this intake is unavailable.", value="")
+                        embed.add_field(name="Exam timetable for this intake is unavailable.", value="N/A")
                     else:
                         for exam in tt:
                             start_date, start_time = exam['since'].split("T")
@@ -364,29 +367,79 @@ class APU_info(commands.Cog):
                     else:
                         await intake_present.edit(embed=embed)
 
-    @tasks.loop(minutes=1)
+    @tasks.loop(hours=24)
     async def examUpdate(self):
-        pass
-        # ch_context = []
-        # for ch in await self._list_channel("Exams"):
-        #     async for msg in ch.history(limit=1000):
-        #         if len(msg.embeds) != 0:
-        #             for e in msg.embeds:
-        #                 if e.footer.text == "Exams":
-        #                     ch_context.append(await self.client.get_context(msg))
-        #
-        # for ctx in ch_context:
-        #     cmd = self.client.get_command("apu exam")
-        #     await ctx.invoke(cmd)
-        # print(f"updated?")
+        for ch in await self._list_channel("Exams"):
+            intakes = []
+            async for msg in ch.history(limit=1000):
+                if len(msg.embeds) != 0:
+                    for e in msg.embeds:
+                        if e.title == "Intake initiated":
+                            intakes.append(e.footer.text)
 
-    @exam.command()
-    async def startloop(self, ctx: commands.Context):
-        self.examUpdate.start()
+            for intake in intakes:
+                tt = await APU.Information.extract_exam(intake)
+                embed = discord.Embed(
+                    title=f"{intake}",
+                    description=f"The following is the exam timetable for intake {intake}. "
+                                f"This message will be updated every day. ",
+                    colour=discord.Colour.from_rgb(52, 235, 52)
+                )
+                if not tt:
+                    embed.add_field(name="Exam timetable for this intake is unavailable.", value="")
+                else:
+                    for exam in tt:
+                        start_date, start_time = exam['since'].split("T")
+                        end_date, end_time = exam['until'].split("T")
+                        start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+                        end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
+                        days_left = (dt.datetime.today() - start_date).days if dt.datetime.today() > start_date else 0
+                        start_time = dt.datetime.strptime(start_time.replace(":", ''), "%H%M%S%z")
+                        end_time = dt.datetime.strptime(end_time.replace(":", ''), "%H%M%S%z")
+                        embed.add_field(
+                            name=f"{exam['subjectDescription']} ({exam['module']})",
+                            value=f"**Date** : {start_date.strftime('%d %B %Y')} ({days_left} days left)\n"
+                                  f"**Time** : {start_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')} \n"
+                                  f"**Duration** : {(end_time - start_time).seconds // 3600}:{str(((end_time - start_time).seconds // 60) % 60).zfill(2)} hour(s) \n"
+                                  f"**Venue** : {exam['venue']} \n"
+                                  f"**Assessment Type** : {exam['assessmentType']} \n"
+                                  f"**Appraisal Due** :  \n"
+                                  f"**Docket Due** :  \n"
+                                  f"================\n"
+                                  f"**Results date** : "
+                                  f"{dt.datetime.strptime(exam['resultDate'], '%Y-%m-%d').strftime('%d %B %Y')}\n"
+                                  f"================",
+                            inline=False
+                        )
 
-    @exam.command()
-    async def stoploop(self, ctx: commands.Context):
-        self.examUpdate.cancel()
+                intake_present = None
+                async for msg in ch.history(limit=100):
+                    if len(msg.embeds) != 0:
+                        for e in msg.embeds:
+                            if e.title == intake:
+                                intake_present = msg
+
+                if intake_present is None:
+                    await ch.send(embed=embed)
+                else:
+                    await intake_present.edit(embed=embed)
+
+        print(f"Updated exam at {datetime.now().strftime('%c')}")
+
+    @examUpdate.error
+    async def examUpdate_err(self, ctx, err):
+        owner = self.client.fetch_user(self.client.owner_id)
+        owner.send("Some error in automatic exam update. Please check the instance for more details.")
+        print(err)
+
+    @examUpdate.before_loop
+    async def before_examUpdate(self):
+        for _ in range(60 * 60 * 24):
+            if datetime.now().hour == 0:
+                print(f"exam task started at {datetime.now().strftime('%c')}")
+                break
+            else:
+                await asyncio.sleep(1)
 
     @exam.command(help="Initiate intake to update.")
     async def set(self, ctx: discord.ext.commands.Context, intake: str):
