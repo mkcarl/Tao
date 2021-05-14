@@ -137,7 +137,7 @@ class APU_info(commands.Cog):
         owner.send("Some error in automatic update. Please check the instance for more details.")
         print(err)
 
-    async def next_holiday(self) -> dict:
+    async def next_holiday(self, index) -> dict:
         today = dt.date.today()
         all_holiday = await APU.Information.extract_holiday()
         for holiday in all_holiday:
@@ -146,13 +146,33 @@ class APU_info(commands.Cog):
         all_holiday = [hol for hol in all_holiday if hol["holiday_end_date"].date() >= dt.date.today()]
         all_holiday.sort(key=lambda x: x["holiday_end_date"])
 
-        return all_holiday[0]
+        return all_holiday[index]
 
-    @apu.command()
+    @apu.group(help="Displays the closest or ongoing holiday.")
     async def holiday(self, ctx: commands.Context):
-        next_hol = await self.next_holiday()
+        if ctx.invoked_subcommand is None:
+            next_hol = await self.next_holiday(0)
+            holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
+                                                    description=f"{next_hol['holiday_description']}",
+                                                    colour=discord.Colour.from_rgb(38, 166, 154))
+            holEmbed.set_author(name="APU holidays")
+            holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
+                               inline=True)
+            holEmbed.add_field(name="Duration",
+                               value=f"{(next_hol['holiday_end_date'] - next_hol['holiday_start_date']).days + 1} day(s)",
+                               inline=True)
+            countdown = (next_hol['holiday_start_date'] - dt.datetime.today()).days + 1
+            holEmbed.add_field(name="Countdown", value=f"{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}",
+                               inline=False)
+            holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
+            await ctx.send(embed=holEmbed)
+
+    @holiday.command(help="Displays the next <index>th holiday. eg: '--apu holiday next 1' will show the next next holiday. ")
+    async def next(self, ctx, index):
+        next_hol = await self.next_holiday(int(index))
         holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
-                                                description=f"{next_hol['holiday_description']}")
+                                                description=f"{next_hol['holiday_description']}",
+                                                colour=discord.Colour.from_rgb(38, 166, 154))
         holEmbed.set_author(name="APU holidays")
         holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
                            inline=True)
@@ -165,17 +185,22 @@ class APU_info(commands.Cog):
         holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
         await ctx.send(embed=holEmbed)
 
-    @tasks.loop(seconds=30)
+    @holiday.error
+    async def hol_err(self, ctx: commands.Context, err):
+        await ctx.reply(f"{ctx.author.mention}, command invalid. Please try again.", delete_after=5)
+        print(err)
+
+    @tasks.loop(hours=24)
     async def holUpdate(self):
-        print("started")
-        next_hol = await self.next_holiday()
+        next_hol = await self.next_holiday(0)
         for hol_ch in await self._list_channel("Holidays"):
             last_msg: discord.Message = None
             async for msg in hol_ch.history(limit=1, oldest_first=False):
                 last_msg = msg
 
             holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
-                                                    description=f"{next_hol['holiday_description']}")
+                                                    description=f"{next_hol['holiday_description']}",
+                                                    colour=discord.Colour.from_rgb(38, 166, 154))
             holEmbed.set_author(name="APU holidays")
             holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
                                inline=True)
@@ -273,13 +298,14 @@ class APU_info(commands.Cog):
         owner.send("Some error in automatic holiday update. Please check the instance for more details.")
         print(err)
 
-    # @holUpdate.before_loop
-    # async def before_holUpdate(self):
-    #     for _ in range(60*60*24):
-    #         if datetime.now().hour == 0:
-    #             break
-    #         else:
-    #             await asyncio.sleep(1)
+    @holUpdate.before_loop
+    async def before_holUpdate(self):
+        for _ in range(60*60*24):
+            if datetime.now().hour == 0:
+                print(f"holiday task started at {datetime.now().strftime('%c')}")
+                break
+            else:
+                await asyncio.sleep(1)
 
     @apu.group()
     async def exam(self, ctx: commands.Context):
