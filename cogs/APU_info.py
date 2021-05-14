@@ -69,7 +69,6 @@ class APU_info(commands.Cog):
         embed = discord.Embed(
             title="APU Holidays Channel",
             description="This channel will be used as a reminder for upcoming holidays for APU."
-                        " Reminder will be sent 7 days in advance."
                         " Delete this message/embed if you change your mind."
         )
         embed.set_footer(text="Holidays")
@@ -138,57 +137,66 @@ class APU_info(commands.Cog):
         owner.send("Some error in automatic update. Please check the instance for more details.")
         print(err)
 
-    async def next_holiday(self):
+    async def next_holiday(self) -> dict:
         today = dt.date.today()
         all_holiday = await APU.Information.extract_holiday()
         for holiday in all_holiday:
             holiday["holiday_start_date"] = datetime.strptime(holiday["holiday_start_date"], "%Y-%m-%d")
             holiday["holiday_end_date"] = datetime.strptime(holiday["holiday_end_date"], "%Y-%m-%d")
-        all_holiday = [hol for hol in all_holiday if hol["holiday_start_date"] > datetime.now()]
-        all_holiday.sort(key=lambda x: x["holiday_start_date"])
+        all_holiday = [hol for hol in all_holiday if hol["holiday_end_date"].date() >= dt.date.today()]
+        all_holiday.sort(key=lambda x: x["holiday_end_date"])
 
         return all_holiday[0]
 
     @apu.command()
-    async def holiday(self, ctx):
+    async def holiday(self, ctx: commands.Context):
         next_hol = await self.next_holiday()
-        holiday_embed = discord.Embed(
-            title=f"{next_hol['holiday_name']}",
-            description=f"{next_hol['holiday_description']}",
-            colour=discord.Colour.from_rgb(38, 166, 154)
-        )
-        holiday_embed.set_author(name="APU holiday updater")
-        holiday_embed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d-%m-%Y')}", inline=True)
-        holiday_embed.add_field(name="End date", value=f"{next_hol['holiday_end_date'].strftime('%d-%m-%Y')}", inline=True)
-        duration = (next_hol['holiday_start_date'] - next_hol['holiday_end_date']).days + 1
-        daysuntil = (next_hol['holiday_start_date'] - datetime.today()).days
-        holiday_embed.add_field(name="Duration", value=f"{duration} {'days' if duration>1 else 'day'}", inline=True)
-        holiday_embed.add_field(name="Countdown", value=f"{daysuntil} {'days' if duration>1 else 'day'}", inline=True)
-
-        await ctx.send(embed=holiday_embed)
+        holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
+                                                description=f"{next_hol['holiday_description']}")
+        holEmbed.set_author(name="APU holidays")
+        holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
+                           inline=True)
+        holEmbed.add_field(name="Duration",
+                           value=f"{(next_hol['holiday_end_date'] - next_hol['holiday_start_date']).days + 1} day(s)",
+                           inline=True)
+        countdown = (next_hol['holiday_start_date'] - dt.datetime.today()).days + 1
+        holEmbed.add_field(name="Countdown", value=f"{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}",
+                           inline=False)
+        holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
+        await ctx.send(embed=holEmbed)
 
     @tasks.loop(hours=24)
     async def holUpdate(self):
-        print("holiday task fired")
         next_hol = await self.next_holiday()
-        days_until = (next_hol['holiday_start_date'] - datetime.today()).days
-        if days_until == 7:
-            for guild in self.client.guilds:
-                for text_channel in guild.text_channels:
-                    async for msg in text_channel.history(limit=1000):
-                        if len(msg.embeds) == 0:
-                            continue
-                        else:
-                            for e in msg.embeds:
-                                if e.footer.text != "Holidays":
-                                    continue
-                                else:
-                                    cmd = self.client.get_command("apu holiday")
-                                    ctx = await self.client.get_context(msg)
-                                    ctx.command = cmd
-                                    await ctx.invoke(cmd)
-                                    print(f"Updated holidays in {ctx.channel.name} at {datetime.now().strftime('%c')}")
+        for hol_ch in await self._list_channel("Holidays"):
+            last_msg: discord.Message = None
+            async for msg in hol_ch.history(limit=1, oldest_first=False):
+                last_msg = msg
 
+            holEmbed: discord.Embed = discord.Embed(title=f"{next_hol['holiday_name']}",
+                                                    description=f"{next_hol['holiday_description']}")
+            holEmbed.set_author(name="APU holidays")
+            holEmbed.add_field(name="Start date", value=f"{next_hol['holiday_start_date'].strftime('%d %B %Y')}",
+                               inline=True)
+            holEmbed.add_field(name="Duration",
+                               value=f"{(next_hol['holiday_end_date'] - next_hol['holiday_start_date']).days + 1} day(s)",
+                               inline=True)
+            countdown = (next_hol['holiday_start_date'] - dt.datetime.today()).days + 1
+            holEmbed.add_field(name="Countdown", value=f"{str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}",
+                               inline=False)
+            holEmbed.set_footer(text=f"{next_hol['holiday_id']}")
+
+            if last_msg.embeds and last_msg.embeds[0].footer.text == str(next_hol["holiday_id"]):
+                # current holiday is same as upcoming holiday
+                await last_msg.edit(embed=holEmbed)
+            else:
+                # current holiday is different from upcoming holiday
+                await hol_ch.send(embed=holEmbed)
+
+            await hol_ch.edit(
+                name=f"{next_hol['holiday_description']} {str(countdown) + 'day(s)' if countdown > 0 else 'Ongoing'}")
+
+            print(f"Updated holiday at channel : {hol_ch.name}")
 
     @holUpdate.error
     async def holUpdate_err(self, ctx, err):
@@ -317,22 +325,22 @@ class APU_info(commands.Cog):
             await ctx.send("This channel is not set to an exam channel yet. Please do so using the "
                            "command `--apu setch exams`")
 
-    async def _is_channel(self, text_channel: discord.TextChannel, ch_type: str) -> bool:
-        is_correct = False
+    async def _is_channel(self, text_channel: discord.TextChannel, ch_type: str):
+        is_correct = None
         async for msg in text_channel.history(limit=1000):
             if len(msg.embeds) == 0:
                 continue
             else:
                 for e in msg.embeds:
                     if e.footer.text == ch_type:
-                        is_correct = True
+                        is_correct = msg
                     else:
                         continue
                 if is_correct:
                     break
         return is_correct
 
-    async def _list_channel(self, ch_type: str) -> list:
+    async def _list_channel(self, ch_type: str) -> list[discord.TextChannel]:
         channels = []
         for guild in self.client.guilds:
             for text_channel in guild.text_channels:
@@ -345,4 +353,6 @@ class APU_info(commands.Cog):
 
 def setup(client):
     client.add_cog(APU_info(client))
+
+
 
