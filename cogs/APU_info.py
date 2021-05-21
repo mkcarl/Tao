@@ -54,7 +54,7 @@ class APU_info(commands.Cog):
             await ctx.send("Invalid `--apu` command.")
 
     @setch.command(help="Set the current channel to a news channel")
-    async def news(self, ctx):
+    async def News(self, ctx):
         embed = discord.Embed(
             title="APU News Channel",
             description="This channel will be used as a news channel that receives automatic updates for events "
@@ -132,7 +132,7 @@ class APU_info(commands.Cog):
                                 print(f"Updated news in {ctx.channel.name} at {datetime.now().strftime('%c')}")
                                 break
     @newsUpdate.error
-    async def newsUpdate_err(self, ctx, err):
+    async def newsUpdate_err(self, err):
         owner = self.client.fetch_user(self.client.owner_id)
         owner.send("Some error in automatic update. Please check the instance for more details.")
         print(err)
@@ -488,7 +488,7 @@ class APU_info(commands.Cog):
                     break
         return is_correct
 
-    async def _list_channel(self, ch_type: str) -> list[discord.TextChannel]:
+    async def _list_channel(self, ch_type: str):
         channels = []
         for guild in self.client.guilds:
             for text_channel in guild.text_channels:
